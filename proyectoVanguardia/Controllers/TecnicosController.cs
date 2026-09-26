@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using FastFix.Models;
+using FastFix.Validators;
 
 namespace FastFix.Controllers;
 
@@ -54,8 +55,10 @@ public class TecnicosController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(Tecnico tecnico)
     {
-        if (string.IsNullOrWhiteSpace(tecnico.Nombre))
-            return BadRequest("El nombre del técnico es obligatorio.");
+        var error = TecnicoValidator.Validar(tecnico);
+
+        if (error is not null)
+            return BadRequest(error);
 
         tecnico.Nombre = tecnico.Nombre.Trim();
 

@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using FastFix.Models;
+using FastFix.Validators;
 
 namespace FastFix.Controllers;
 
@@ -42,7 +43,7 @@ public class ClientesController : ControllerBase
     {
         AplicarTransformacion(cliente);
 
-        var error = ValidarCliente(cliente);
+        var error = ClienteValidator.Validar(cliente);
 
         if (error is not null)
             return BadRequest(error);
@@ -69,7 +70,7 @@ public class ClientesController : ControllerBase
 
         AplicarTransformacion(clienteActualizado);
 
-        var error = ValidarCliente(clienteActualizado);
+        var error = ClienteValidator.Validar(clienteActualizado);
 
         if (error is not null)
             return BadRequest(error);
@@ -90,19 +91,5 @@ public class ClientesController : ControllerBase
             " ");
 
         cliente.Telefono = cliente.Telefono?.Trim() ?? string.Empty;
-    }
-
-    private static string? ValidarCliente(Cliente cliente)
-    {
-        if (string.IsNullOrWhiteSpace(cliente.Nombre))
-            return "El nombre del cliente es obligatorio.";
-
-        if (string.IsNullOrWhiteSpace(cliente.Telefono))
-            return "El teléfono del cliente es obligatorio.";
-
-        if (!Regex.IsMatch(cliente.Telefono, @"^\d{8}$"))
-            return "El teléfono debe tener 8 dígitos.";
-
-        return null;
     }
 }

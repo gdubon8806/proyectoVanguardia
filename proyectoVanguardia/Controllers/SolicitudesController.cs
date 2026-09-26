@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using FastFix.Models;
+using FastFix.Validators;
 
 namespace FastFix.Controllers;
 
@@ -45,6 +46,7 @@ public class SolicitudesController : ControllerBase
         return Ok(solicitudes);
     }
 
+    // Obtener una solicitud por ID
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
@@ -68,7 +70,7 @@ public class SolicitudesController : ControllerBase
     {
         AplicarTransformacion(solicitud);
 
-        var error = ValidarSolicitud(solicitud);
+        var error = SolicitudValidator.Validar(solicitud);
 
         if (error is not null)
             return BadRequest(error);
@@ -78,7 +80,7 @@ public class SolicitudesController : ControllerBase
         if (cliente is null)
             return BadRequest("El cliente indicado no existe.");
 
-        var errorCliente = ValidarCliente(cliente);
+        var errorCliente = ClienteValidator.Validar(cliente);
 
         if (errorCliente is not null)
             return BadRequest(errorCliente);
@@ -110,14 +112,14 @@ public class SolicitudesController : ControllerBase
         if (solicitud is null)
             return NotFound();
 
-        // Regla: una solicitud completada no se puede modificar.
+        // Una solicitud completada no se puede modificar.
         if (solicitud.Estado == Completada)
             return Conflict(
                 "Una solicitud completada no puede modificarse.");
 
         AplicarTransformacion(solicitudActualizada);
 
-        var error = ValidarSolicitud(solicitudActualizada);
+        var error = SolicitudValidator.Validar(solicitudActualizada);
 
         if (error is not null)
             return BadRequest(error);
@@ -127,6 +129,11 @@ public class SolicitudesController : ControllerBase
 
         if (cliente is null)
             return BadRequest("El cliente indicado no existe.");
+
+        var errorCliente = ClienteValidator.Validar(cliente);
+
+        if (errorCliente is not null)
+            return BadRequest(errorCliente);
 
         solicitud.ClienteId = solicitudActualizada.ClienteId;
         solicitud.DescripcionProblema =
@@ -158,12 +165,12 @@ public class SolicitudesController : ControllerBase
         if (tecnico is null)
             return NotFound("El técnico no existe.");
 
-        // Regla: solo técnico marcado como disponible.
+        // Solo se puede asignar un técnico disponible.
         if (!tecnico.Disponible)
             return Conflict(
                 "El técnico no está disponible.");
 
-        // Regla: máximo 3 solicitudes activas.
+        // Un técnico puede tener máximo 3 solicitudes activas.
         var solicitudesActivas = await _db.Solicitudes.CountAsync(s =>
             s.TecnicoId == tecnicoId &&
             s.Id != id &&
@@ -176,6 +183,37 @@ public class SolicitudesController : ControllerBase
 
         solicitud.TecnicoId = tecnicoId;
         solicitud.Estado = Asignada;
+
+        await _db.SaveChangesAsync();
+
+        return Ok(solicitud);
+    }
+
+    // Pasar solicitud a En Proceso
+    [HttpPut("{id}/en-proceso")]
+    public async Task<IActionResult> EnProcesoSolicitud(int id)
+    {
+        var solicitud = await _db.Solicitudes.FindAsync(id);
+
+        if (solicitud is null)
+            return NotFound("La solicitud no existe.");
+
+        // Una solicitud completada no puede modificarse.
+        if (solicitud.Estado == Completada)
+            return Conflict(
+                "Una solicitud completada no puede modificarse.");
+
+        // Debe tener técnico asignado.
+        if (solicitud.TecnicoId is null)
+            return Conflict(
+                "La solicitud debe tener un técnico asignado.");
+
+        // Solo una solicitud asignada puede pasar a En Proceso.
+        if (solicitud.Estado != Asignada)
+            return Conflict(
+                "Solo una solicitud asignada puede pasar a En Proceso.");
+
+        solicitud.Estado = EnProceso;
 
         await _db.SaveChangesAsync();
 
@@ -195,7 +233,7 @@ public class SolicitudesController : ControllerBase
             return Conflict(
                 "La solicitud ya está completada.");
 
-        // Regla: no puede completarse sin técnico.
+        // No puede completarse sin técnico.
         if (solicitud.TecnicoId is null)
             return Conflict(
                 "La solicitud no puede completarse sin un técnico asignado.");
@@ -220,7 +258,7 @@ public class SolicitudesController : ControllerBase
         if (solicitud is null)
             return NotFound();
 
-        // Regla: las completadas no se pueden eliminar.
+        // Las solicitudes completadas no se pueden eliminar.
         if (solicitud.Estado == Completada)
             return Conflict(
                 "Una solicitud completada no puede eliminarse.");
@@ -231,10 +269,7 @@ public class SolicitudesController : ControllerBase
         return NoContent();
     }
 
-    // ----------------------------
     // Transformaciones
-    // ----------------------------
-
     private static void AplicarTransformacion(
         SolicitudServicio solicitud)
     {
@@ -245,44 +280,7 @@ public class SolicitudesController : ControllerBase
             " ");
     }
 
-    // ----------------------------
-    // Validaciones
-    // ----------------------------
-
-    private static string? ValidarSolicitud(
-        SolicitudServicio solicitud)
-    {
-        if (solicitud.ClienteId <= 0)
-            return "Debe indicar un cliente válido.";
-
-        if (string.IsNullOrWhiteSpace(
-            solicitud.DescripcionProblema))
-            return "La descripción del problema es obligatoria.";
-
-        if (solicitud.DescripcionProblema.Length < 10)
-            return "La descripción debe tener al menos 10 caracteres.";
-
-        return null;
-    }
-
-    private static string? ValidarCliente(Cliente cliente)
-    {
-        if (string.IsNullOrWhiteSpace(cliente.Nombre))
-            return "El nombre del cliente es obligatorio.";
-
-        if (string.IsNullOrWhiteSpace(cliente.Telefono))
-            return "El teléfono del cliente es obligatorio.";
-
-        if (!Regex.IsMatch(cliente.Telefono, @"^\d{8}$"))
-            return "El teléfono debe tener 8 dígitos.";
-
-        return null;
-    }
-
-    // ----------------------------
     // Estados
-    // ----------------------------
-
     private static string? NormalizarEstado(string estado)
     {
         if (estado.Equals(
