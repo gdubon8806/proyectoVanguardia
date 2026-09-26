@@ -17,15 +17,16 @@ builder.Services.AddSwaggerGen();
 var app = builder.Build();
 
 
-// Aplicar migraciones automáticamente
-using (var scope = app.Services.CreateScope())
+if (app.Environment.IsDevelopment())
 {
-    var db = scope.ServiceProvider
-        .GetRequiredService<FastFixDbContext>();
+    using (var scope = app.Services.CreateScope())
+    {
+        var db = scope.ServiceProvider
+            .GetRequiredService<FastFixDbContext>();
 
-    db.Database.Migrate();
+        db.Database.Migrate();
+    }
 }
-
 
 // Swagger
 

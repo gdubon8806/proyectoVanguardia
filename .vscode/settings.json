@@ -1,0 +1,5 @@
+{
+    "appService.preDeployTask": "publish-release",
+    "appService.deploySubpath": "proyectoVanguardia\\bin\\Release\\net8.0\\publish",
+    "appService.defaultWebAppToDeploy": "/subscriptions/4a83f289-4842-46a7-9d21-1eb537d5616c/resourceGroups/rg-fastfix/providers/Microsoft.Web/sites/fastfix-api-GKM"
+}
